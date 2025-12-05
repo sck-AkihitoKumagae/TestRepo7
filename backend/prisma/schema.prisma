@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ServerField {
+  id           BigInt   @id @default(autoincrement())
+  key          String   @unique
+  label        String
+  type         String   // string, number, boolean, enum, date, url
+  unit         String?
+  options      Json?
+  required     Boolean  @default(false)
+  group        String?
+  orderIndex   Int      @default(0) @map("order_index")
+  visible      Boolean  @default(true)
+  defaultValue Json?    @map("default_value")
+
+  @@map("server_fields")
+}
+
+model Server {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  ipAddress   String?   @map("ip_address") @db.Inet
+  environment String    // prod, stg, dev
+  os          String?
+  role        String?
+  location    String?
+  attributes  Json      @default("{}")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  
+  tags        ServerTag[]
+  metrics     Metric[]
+  auditLogs   AuditLog[]
+
+  @@map("servers")
+}
+
+model ServerTag {
+  serverId  String  @map("server_id") @db.Uuid
+  tag       String
+  
+  server    Server  @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@id([serverId, tag])
+  @@map("server_tags")
+}
+
+model Metric {
+  id        BigInt   @id @default(autoincrement())
+  serverId  String   @map("server_id") @db.Uuid
+  metric    String
+  ts        DateTime @db.Timestamptz(6)
+  value     Decimal  @db.Decimal
+  
+  server    Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, metric, ts(sort: Desc)])
+  @@map("metrics")
+}
+
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  actor     String
+  action    String   // create, update, delete, field_add
+  serverId  String?  @map("server_id") @db.Uuid
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  
+  server    Server?  @relation(fields: [serverId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
